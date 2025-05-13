@@ -16,6 +16,15 @@ Creating an email parser using Golang and OAuth 2.0 for Google involves the foll
 
 Please install or update your golang version to  1.21 or latest
 
+Setup ENV :
+Please follow this command to set environment on development :
+
+```
+export GO_ENV=development
+export CREDENTIALS_FILE=credentials.json
+export TOKEN_FILE=token.json
+```
+
 Please follow this command step by step :
 
 ```

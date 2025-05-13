@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -27,7 +28,7 @@ func getClient(config *oauth2.Config, ctx context.Context) *http.Client {
 	tokenSource := config.TokenSource(ctx, token)
 	refreshedToken, err := tokenSource.Token()
 	if err != nil {
-		log.Fatalf("unable to refresh token: %v", err)
+		log.Printf("❌ Unable to refresh token: %v", err)
 	}
 
 	// 🔹 Save the new refreshed token back to file
@@ -45,12 +46,12 @@ func getTokenFromWeb(config *oauth2.Config) *oauth2.Token {
 	var authCode string
 	fmt.Print("Enter authorization code: ")
 	if _, err := fmt.Scan(&authCode); err != nil {
-		log.Fatalf("Unable to read authorization code: %v", err)
+		log.Printf("❌ Unable to read authorization code: %v", err)
 	}
 
 	token, err := config.Exchange(context.Background(), authCode)
 	if err != nil {
-		log.Fatalf("Unable to retrieve token from web: %v", err)
+		log.Printf("❌ Unable to retrieve token from web: %v", err)
 	}
 	return token
 }
@@ -73,7 +74,7 @@ func saveToken(path string, token *oauth2.Token) {
 	// f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	f, err := os.Create(path)
 	if err != nil {
-		log.Fatalf("Unable to cache OAuth token: %v", err)
+		log.Printf("❌ Unable to cache OAuth token: %v", err)
 	}
 	defer f.Close()
 	json.NewEncoder(f).Encode(token)
@@ -83,22 +84,33 @@ func saveToken(path string, token *oauth2.Token) {
 func getGmailService() (*gmail.Service, error) {
 	ctx := context.Background()
 
+	// credentialsFile := os.Getenv("credentials.json")
+	credentialsFile := os.Getenv("CREDENTIALS_FILE")
+	if credentialsFile == "" {
+		log.Printf("❌ CREDENTIALS_FILE environment variable not set")
+	}
+
 	// Load credentials from the JSON file
-	b, err := os.ReadFile("credentials.json")
+	b, err := os.ReadFile(credentialsFile)
 	if err != nil {
-		log.Fatalf("Unable to read client secret file: %v", err)
+		log.Printf("❌ Unable to read client secret file: %v", err)
 	}
 
 	// Configure the OAuth2 client
-	config, err := google.ConfigFromJSON(b, gmail.GmailModifyScope)
+	config, err := google.ConfigFromJSON(b, gmail.GmailModifyScope,
+		"https://www.googleapis.com/auth/userinfo.email")
 	if err != nil {
-		log.Fatalf("Unable to parse client secret file to config: %v", err)
+		log.Printf("❌ Unable to parse client secret file to config: %v", err)
 	}
 
 	// client := getClient(config, ctx)
 
 	// Load token from file
-	tokenFile := "token.json"
+	// tokenFile := "token.json"
+	tokenFile := os.Getenv("TOKEN_FILE")
+	if credentialsFile == "" {
+		log.Printf("❌ TOKEN_FILE environment variable not set")
+	}
 	token, err := tokenFromFile(tokenFile)
 	if err != nil {
 		// return nil, fmt.Errorf("unable to load token: %v", err)
@@ -112,7 +124,7 @@ func getGmailService() (*gmail.Service, error) {
 
 	// ❗️Check if refresh_token exists (it should never be empty)
 	if token.RefreshToken == "" {
-		log.Fatalf("❌ Refresh Token is missing! Re-authentication required.")
+		log.Printf("❌ Refresh Token is missing! Re-authentication required.")
 	}
 
 	// 🔥 ✅ Use TokenSource to refresh tokens automatically
@@ -147,9 +159,61 @@ func getGmailService() (*gmail.Service, error) {
 	// Create the Gmail service
 	srv, err := gmail.NewService(ctx, option.WithHTTPClient(client))
 	if err != nil {
-		log.Fatalf("Unable to retrieve Gmail client: %v", err)
+		log.Printf("❌Unable to retrieve Gmail client: %v", err)
 	}
 
 	log.Println("✅ Gmail service initialized successfully.")
 	return srv, nil
+}
+
+// GetUserEmail fetches the user's email from Google's UserInfo endpoint.
+func GetUserEmail(ctx context.Context, config *oauth2.Config, token *oauth2.Token) (string, error) {
+	// Create an authenticated HTTP client
+	client := config.Client(ctx, token)
+
+	// Call the userinfo endpoint
+	resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
+	if err != nil {
+		return "", fmt.Errorf("failed to call userinfo endpoint: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read the response body
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read userinfo response: %w", err)
+	}
+
+	// log.Printf("UserInfo response: %s", data)
+
+	// Parse JSON response
+	var userInfo struct {
+		Email string `json:"email"`
+	}
+	if err := json.Unmarshal(data, &userInfo); err != nil {
+		return "", fmt.Errorf("failed to parse userinfo JSON: %w", err)
+	}
+
+	if userInfo.Email == "" {
+		return "", fmt.Errorf("email not found in userinfo response")
+	}
+
+	return userInfo.Email, nil
+}
+
+func getEmail() string {
+	ctx := context.Background()
+
+	token, err := tokenFromFile(os.Getenv("TOKEN_FILE"))
+	credentialsData, err := os.ReadFile(os.Getenv("CREDENTIALS_FILE"))
+	config, _ := google.ConfigFromJSON(credentialsData,
+		"https://www.googleapis.com/auth/userinfo.email")
+
+	email, err := GetUserEmail(ctx, config, token)
+	if err != nil {
+		log.Printf("❌Error getting email: %v", err)
+	}
+	// fmt.Println("Authenticated user's email:", email)
+
+	return email
 }

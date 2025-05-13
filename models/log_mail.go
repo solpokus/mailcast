@@ -13,6 +13,7 @@ type LogMail struct {
 	// ScheduleAt  time.Time `gorm:"column:schedule_at"`
 	CreatedDate time.Time `gorm:"column:created_date;autoCreateTime"`
 	// UpdatedDate time.Time `gorm:"column:updated_date;autoUpdateTime"`
+	PccId string `gorm:"column:pcc"`
 }
 
 // TableName overrides the default table name
