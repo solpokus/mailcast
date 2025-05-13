@@ -12,19 +12,24 @@ import (
 	"google.golang.org/api/gmail/v1"
 )
 
-func SchedulerEmail() {
+func SchedulerEmail() error {
 	log.Println("✅ Task SchedulerEmail executed successfully")
-	CheckEmailOauthAndStart()
+	err := CheckEmailOauthAndStart()
+	if err != nil {
+		return fmt.Errorf("Failed to to run SchedulerEmail : %w", err)
+	}
+	return nil
 }
 
-func CheckEmailOauthAndStart() {
+func CheckEmailOauthAndStart() error {
 
 	fmt.Println("Starting Gmail Parser...")
 
 	// Get Gmail service
 	srv, err := getGmailService()
 	if err != nil {
-		log.Fatalf("Failed to initialize Gmail API: %v", err)
+		log.Println("Failed to initialize Gmail API: %v", err)
+		return fmt.Errorf("Failed to initialize Gmail API: %w", err)
 	}
 
 	log.Println("Connected to the server")
@@ -33,11 +38,16 @@ func CheckEmailOauthAndStart() {
 	query := "label:INBOX" // Filter by inbox label
 	req := srv.Users.Messages.List(user)
 
+	// Get Email
+	emailUrl := getEmail()
+	log.Println("Using Email User : " + emailUrl)
+
 	log.Println("Logged in")
 
 	msgs, err := req.Q(query).Do()
 	if err != nil {
-		log.Fatalf("Unable to retrieve messages: %v", err)
+		log.Println("Unable to retrieve messages: %v", err)
+		return fmt.Errorf("Unable to retrieve messages: %w", err)
 	}
 
 	log.Printf("Fetching %d latest emails asynchronously...\n", len(msgs.Messages))
@@ -75,13 +85,15 @@ func CheckEmailOauthAndStart() {
 	for email := range emailChan {
 		// fmt.Println("----------------------------------------------------")
 		// fmt.Println(email)
-		processEmailsV2(email, srv)
+		processEmailsV2(email, srv, emailUrl)
 	}
 
 	log.Println("Logged out")
+
+	return nil
 }
 
-func processEmailsV2(messages *gmail.Message, service *gmail.Service) {
+func processEmailsV2(messages *gmail.Message, service *gmail.Service, mailboxEmail string) {
 
 	// fmt.Println("----------------------------------------------------")
 	// fmt.Println(messages)
@@ -89,11 +101,11 @@ func processEmailsV2(messages *gmail.Message, service *gmail.Service) {
 
 		subject := getHeaderByName("Subject", messages)
 
-		processSubjectV2(subject, messages, service, messages.Id)
+		processSubjectV2(subject, messages, service, messages.Id, mailboxEmail)
 	}
 }
 
-func processSubjectV2(subject string, msg *gmail.Message, service *gmail.Service, messageID string) {
+func processSubjectV2(subject string, msg *gmail.Message, service *gmail.Service, messageID string, mailboxEmail string) {
 	if strings.Contains(strings.ToLower(subject), strings.ToLower("PREFLIGHT INFO GALILEO")) {
 		// if strings.Contains(strings.ToLower(subject), strings.ToLower("PREFLIGHT INFO GALILEO - SQ - B2B3B4")) {
 		fmt.Printf("Subject: %s\n", subject)
@@ -102,7 +114,7 @@ func processSubjectV2(subject string, msg *gmail.Message, service *gmail.Service
 		recipients := getRecipientEmails(msg)
 		fmt.Println("Recipients:", recipients)
 
-		shouldReturn := processBodyMsgV2(msg, service, messageID)
+		shouldReturn := processBodyMsgV2(msg, service, messageID, mailboxEmail)
 		if shouldReturn {
 			fmt.Println("s:", shouldReturn)
 			return
@@ -110,7 +122,7 @@ func processSubjectV2(subject string, msg *gmail.Message, service *gmail.Service
 	}
 }
 
-func processBodyMsgV2(msg *gmail.Message, service *gmail.Service, messageID string) bool {
+func processBodyMsgV2(msg *gmail.Message, service *gmail.Service, messageID string, mailboxEmail string) bool {
 	// Decode the email body
 	r := parseEmailBody(msg)
 
@@ -121,19 +133,19 @@ func processBodyMsgV2(msg *gmail.Message, service *gmail.Service, messageID stri
 
 	// fmt.Println("start body:", r)
 
-	processEmailTextV2(r, msg, service, messageID, util.DELETE_EMAIL_AFTER_PROCESS)
+	processEmailTextV2(r, msg, service, messageID, util.DELETE_EMAIL_AFTER_PROCESS, mailboxEmail)
 
 	return false
 }
 
-func processEmailTextV2(body string, msg *gmail.Message, service *gmail.Service, messageID string, delete bool) {
+func processEmailTextV2(body string, msg *gmail.Message, service *gmail.Service, messageID string, delete bool, mailboxEmail string) {
 
 	fmt.Println("------------- start processMsgs ------------------")
 	b := strings.TrimSpace(string(body))
 	b = strings.ReplaceAll(b, "\u00A0", " ")
 
 	// Uncomment later
-	ProcessMsgs(body)
+	ProcessMsgs(body, mailboxEmail)
 	// fmt.Println("start processMsgs body:", b)
 
 	// Insert mail log to db
@@ -202,5 +214,7 @@ func insertLog(msg *gmail.Message, body string) {
 	subject := getHeaderByName("Subject", msg)
 	from := getHeaderByName("From", msg)
 
-	repository.InsertNewLogMail(subject, body, from)
+	pccList := util.ExtractPccId(body)
+
+	repository.InsertNewLogMail(subject, body, from, pccList.PccId)
 }

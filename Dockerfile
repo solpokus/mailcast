@@ -18,7 +18,9 @@ RUN go mod download
 COPY . .
 COPY config.yaml .
 COPY credentials.json .
+COPY credentials-prod.json .
 COPY token.json .
+COPY token-prod.json .
 
 # Build the Go application
 RUN go build -o mailcast cmd/main.go
@@ -30,7 +32,8 @@ FROM alpine:latest
 RUN apk add --no-cache tzdata
 
 # Set timezone inside Docker (optional)
-ENV TZ=Asia/Jakarta
+# ENV TZ=Asia/Jakarta
+ENV TZ=UTC
 
 # Set the working directory
 WORKDIR /app
@@ -39,7 +42,9 @@ WORKDIR /app
 COPY --from=builder /app/mailcast .
 COPY --from=builder /app/config.yaml .
 COPY --from=builder /app/credentials.json .
+COPY --from=builder /app/credentials-prod.json .
 COPY --from=builder /app/token.json .
+COPY --from=builder /app/token-prod.json .
 
 # Run the application
 CMD ["./mailcast"]

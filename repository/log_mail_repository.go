@@ -7,13 +7,14 @@ import (
 )
 
 // Inserts a new log mail into the database
-func InsertNewLogMail(strSubject string, strBody string, strFrom string) {
+func InsertNewLogMail(strSubject string, strBody string, strFrom string, strPccId string) {
 
 	// Insert a new record
 	newMessage := models.LogMail{
 		MsgSubject: strSubject,
 		MsgBody:    strBody,
 		MsgFrom:    strFrom,
+		PccId:      strPccId,
 		// ScheduleAt: scheduleAt,
 		// ScheduleAt: time.Now().Add(24 * time.Hour), // Schedule for tomorrow
 	}

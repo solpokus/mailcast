@@ -32,3 +32,11 @@ type Schedule struct {
 	From           string    // Departure airport code
 	To             string    // Arrival airport code
 }
+
+type Pcc struct {
+	PccId string
+}
+
+type Pnr struct {
+	ProviderPnr string
+}

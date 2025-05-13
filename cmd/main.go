@@ -2,8 +2,8 @@ package main
 
 import (
 	"mailcast/configuration"
+	"mailcast/cron"
 	"mailcast/database"
-	"mailcast/services"
 )
 
 func main() {
@@ -20,9 +20,12 @@ func main() {
 
 	// checkEmailAndStart()
 
-	// cron.SchedEmail()
+	cron.SchedEmail()
 
-	services.CheckEmailOauthAndStart()
+	// services.CheckEmailOauthAndStart()
+
+	// repository.SyncTaskRedisToPostgre()
+	// repository.InsertTaskToRedis()
 
 	// client.MainClient()
 
