@@ -38,8 +38,6 @@ func sendWaMessage(id int, to, msg, imgUrl string, scheduledAt time.Time) {
 	// Send the POST request with headers
 	resp, err := clientResty.R().
 		SetHeaders(map[string]string{
-			// "Authorization": "defaultDS-49434e96f251d2ff",
-			// "x-api-key":     "23b964f4c543ccdc",
 			// "jwt":           util.JWT,
 			"Accept":       "application/json",
 			"Content-Type": "application/json",
